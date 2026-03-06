@@ -1,6 +1,4 @@
-미안, 핵심 내용을 하나도 빠뜨리지 않고 네가 정리한 모든 상세 로직과 흐름을 다 때려 넣은 풀 버전으로 다시 작성했어. 이 정도면 프로젝트의 바이블 수준으로 쓸 수 있을 거야. 그대로 복사해서 사용해.
-
-Real-World Social Deduction Game Project
+# Real-World Social Deduction Game Project
 현실 공간에서의 정밀한 거리 측정(UWB/BLE)과 LLM 기반의 AI 가이드를 결합한 차세대 소셜 디덕션 게임 플랫폼입니다.
 
 1. 시스템 아키텍처 (System Architecture)
@@ -166,3 +164,4 @@ ai_message (전체 피드) 및 ai_guide (개별 팝업) 소켓 전송
 통합 테스트: WebSocket 연결을 통한 각 시스템 간의 이벤트 체인 연동 확인
 
 E2E 테스트: 실제 모바일 기기 다수를 활용한 실시간 위치 이동 및 소켓 통신 시뮬레이션
+
