@@ -3,24 +3,26 @@
 
 require('dotenv').config();
 
-const OpenAI           = require('openai');
-const { createClient } = require('@supabase/supabase-js');
-const { getParentChunk } = require('./knowledgeBase/index');
+const { GoogleGenerativeAI } = require('@google/generative-ai');
+const { createClient }       = require('@supabase/supabase-js');
+const { getParentChunk }     = require('./knowledgeBase/index');
 
-const openai   = new OpenAI({ apiKey: process.env.OPENAI_API_KEY });
+const genAI    = new GoogleGenerativeAI(process.env.GEMINI_API_KEY);
 const supabase = createClient(
   process.env.SUPABASE_URL,
   process.env.SUPABASE_SERVICE_KEY
 );
 
-const EMBED_MODEL    = 'text-embedding-3-small';
+// embedding-001: 768차원 출력
+const EMBED_MODEL    = 'embedding-001';
 const TABLE_NAME     = 'game_rules';
 const TOP_K          = 5;
 const MIN_SIMILARITY = 0.65;
 
 async function embedQuery(text) {
-  const res = await openai.embeddings.create({ model: EMBED_MODEL, input: text });
-  return res.data[0].embedding;
+  const embedModel = genAI.getGenerativeModel({ model: EMBED_MODEL });
+  const result     = await embedModel.embedContent(text);
+  return result.embedding.values;
 }
 
 async function searchChildren(embedding, gameType, role, phase) {

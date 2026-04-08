@@ -64,26 +64,29 @@ async function ask(room, player, question) {
       `\n[현재 게임 상황]\n${plugin.buildStateContext(room, player)}`,
     ].join('\n');
 
-    // 5. 대화 히스토리 포함 GPT-4o 호출
-    const { OpenAI } = require('openai');
-    const openai = new OpenAI({ apiKey: process.env.OPENAI_API_KEY });
-
-    const messages = [
-      { role: 'system',    content: systemPrompt },
-      ...getHistory(room.roomId, player.userId),
-      { role: 'user',      content: question },
-    ];
-
-    const res = await openai.chat.completions.create({
-      model:       'gpt-4o',
-      max_tokens:  200,
-      temperature: 0.7,
-      messages,
+    // 5. 대화 히스토리 포함 Gemini 호출
+    const { GoogleGenerativeAI } = require('@google/generative-ai');
+    const genAI    = new GoogleGenerativeAI(process.env.GEMINI_API_KEY);
+    const genModel = genAI.getGenerativeModel({
+      model:             'gemini-2.5-flash',
+      systemInstruction: systemPrompt,
     });
 
-    const answer = res.choices[0].message.content.trim();
+    // OpenAI 형식(user/assistant) → Gemini 형식(user/model) 변환
+    const geminiHistory = getHistory(room.roomId, player.userId).map(msg => ({
+      role:  msg.role === 'assistant' ? 'model' : 'user',
+      parts: [{ text: msg.content }],
+    }));
 
-    // 6. 히스토리 저장
+    const chatSession = genModel.startChat({
+      history:          geminiHistory,
+      generationConfig: { maxOutputTokens: 200, temperature: 0.7 },
+    });
+
+    const res    = await chatSession.sendMessage(question);
+    const answer = res.response.text().trim();
+
+    // 6. 히스토리 저장 (내부 포맷은 OpenAI 호환 유지)
     addHistory(room.roomId, player.userId, 'user',      question);
     addHistory(room.roomId, player.userId, 'assistant', answer);
 
@@ -140,6 +143,15 @@ async function onGameEnd(room, result) {
   return chat({ prompt, systemPrompt: SYSTEM_PROMPT, model: 'fast' });
 }
 
+// ── 소켓 조회 헬퍼 ───────────────────────────────────
+
+function getSocket(io, userId) {
+  for (const [, s] of io.sockets.sockets) {
+    if (s.userId === userId) return s;
+  }
+  return null;
+}
+
 // ── 개인 가이드 ───────────────────────────────────────
 
 async function generateGuide(room, player) {
@@ -153,6 +165,9 @@ async function generateGuide(room, player) {
 }
 
 function startGuideScheduler(room, io) {
+  // io를 명시적으로 클로저에 캡처 — setInterval 콜백 내부에서 안전하게 참조
+  const _io = io;
+
   const handle = setInterval(async () => {
     if (room.status === 'ended')   { clearInterval(handle); return; }
     if (room.status === 'meeting') return;
@@ -161,7 +176,7 @@ function startGuideScheduler(room, io) {
       if (!player.isAlive) continue;
       try {
         const message = await generateGuide(room, player);
-        const s = getSocket(io, player.userId);
+        const s = getSocket(_io, player.userId);
         const type = player.team === 'impostor' ? 'impostor_guide' : 'crew_guide';
         if (s && message) s.emit('ai_guide', { type, message });
       } catch (e) {
@@ -176,13 +191,6 @@ function startGuideScheduler(room, io) {
 function stopGuideScheduler(room) {
   if (room._guideScheduler) { clearInterval(room._guideScheduler); room._guideScheduler = null; }
   for (const [, player] of room.players) clearHistory(room.roomId, player.userId);
-}
-
-function getSocket(io, userId) {
-  for (const [, s] of io.sockets.sockets) {
-    if (s.userId === userId) return s;
-  }
-  return null;
 }
 
 module.exports = {
